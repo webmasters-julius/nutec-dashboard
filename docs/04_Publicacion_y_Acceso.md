@@ -82,7 +82,7 @@ Las llaves nunca van en el chat ni en el repositorio: solo en `.env.local` y en 
 
 ## Variables de entorno
 
-Son todas las de `.env.example` (tabla completada el 16 de noviembre de 2026).
+Los valores reales van en `.env.local` (en local) y en las variables del proyecto de Vercel (publicado). Ambos están fuera de Git. No existe `.env.example`: esta tabla es la lista de variables (completada el 16 de noviembre de 2026).
 
 | Variable | Para qué |
 |---|---|

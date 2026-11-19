@@ -70,6 +70,15 @@ function aFecha(valor: unknown): FechaISO {
   return String(valor);
 }
 
+/**
+ * Parámetro de tipo DATE. No se pasa el texto con `types: { x: "DATE" }`: el cliente
+ * de BigQuery lo convierte en NULL sin avisar y toda consulta por fecha devuelve
+ * cero filas. `BigQuery.date()` sí lo envía bien.
+ */
+function fechaParam(valor: FechaISO) {
+  return BigQuery.date(valor);
+}
+
 const n = (v: unknown) => Number(v ?? 0);
 
 async function consultar<T>(query: Query): Promise<T[]> {
@@ -89,8 +98,7 @@ async function ultimoDia(fuente: Fuente, hoy: FechaISO): Promise<FechaISO | null
   const filas = await consultar<{ ultimo: unknown }>({
     query: `SELECT MAX(fecha) AS ultimo FROM ${tabla(TABLA_ULTIMO_DIA[fuente])}
             WHERE fecha BETWEEN DATE_SUB(@hoy, INTERVAL ${DIAS_BUSQUEDA_ULTIMO_DIA} DAY) AND @hoy`,
-    params: { hoy },
-    types: { hoy: "DATE" },
+    params: { hoy: fechaParam(hoy) },
   });
   return filas[0]?.ultimo ? aFecha(filas[0].ultimo) : null;
 }
@@ -123,16 +131,13 @@ const sumasGa4 = (f: CrudaGa4) => ({
   segundosInteraccion: n(f.segundos_interaccion),
 });
 
-const RANGO = { types: { desde: "DATE", hasta: "DATE" } } as const;
-
 async function gscSitioPorDia(v: Ventana): Promise<FilaGscDia[]> {
   "use cache";
   cacheLife("hours");
   const filas = await consultar<CrudaGsc & { fecha: unknown }>({
     query: `SELECT fecha, ${SUMAS_GSC} FROM ${tabla("fact_gsc_sitio_dia")}
             WHERE fecha BETWEEN @desde AND @hasta GROUP BY fecha ORDER BY fecha`,
-    params: { desde: v.desde, hasta: v.hasta },
-    ...RANGO,
+    params: { desde: fechaParam(v.desde), hasta: fechaParam(v.hasta) },
   });
   return filas.map((f) => ({ fecha: aFecha(f.fecha), ...sumasGsc(f) }));
 }
@@ -144,8 +149,7 @@ async function gscPorPagina(v: Ventana): Promise<FilaGscPagina[]> {
     query: `SELECT path, ANY_VALUE(url_completa) AS url_completa, ${SUMAS_GSC}
             FROM ${tabla("fact_gsc_pagina_dia")}
             WHERE fecha BETWEEN @desde AND @hasta GROUP BY path`,
-    params: { desde: v.desde, hasta: v.hasta },
-    ...RANGO,
+    params: { desde: fechaParam(v.desde), hasta: fechaParam(v.hasta) },
   });
   return filas.map((f) => ({ path: f.path, url_completa: f.url_completa, ...sumasGsc(f) }));
 }
@@ -156,8 +160,7 @@ async function ga4PorDia(v: Ventana, canal: string): Promise<FilaGa4Dia[]> {
   const filas = await consultar<CrudaGa4 & { fecha: unknown }>({
     query: `SELECT fecha, ${SUMAS_GA4} FROM ${tabla("fact_ga4_pagina_dia")}
             WHERE fecha BETWEEN @desde AND @hasta AND canal = @canal GROUP BY fecha ORDER BY fecha`,
-    params: { desde: v.desde, hasta: v.hasta, canal },
-    types: { ...RANGO.types, canal: "STRING" },
+    params: { desde: fechaParam(v.desde), hasta: fechaParam(v.hasta), canal },
   });
   return filas.map((f) => ({ fecha: aFecha(f.fecha), ...sumasGa4(f) }));
 }
@@ -168,8 +171,7 @@ async function ga4PorPagina(v: Ventana, canal: string): Promise<FilaGa4Pagina[]>
   const filas = await consultar<CrudaGa4 & { path: string }>({
     query: `SELECT path, ${SUMAS_GA4} FROM ${tabla("fact_ga4_pagina_dia")}
             WHERE fecha BETWEEN @desde AND @hasta AND canal = @canal GROUP BY path`,
-    params: { desde: v.desde, hasta: v.hasta, canal },
-    types: { ...RANGO.types, canal: "STRING" },
+    params: { desde: fechaParam(v.desde), hasta: fechaParam(v.hasta), canal },
   });
   return filas.map((f) => ({ path: f.path, ...sumasGa4(f) }));
 }
@@ -206,8 +208,7 @@ async function rankDiario(v: Ventana): Promise<FactRankDaily[]> {
             WHERE fecha BETWEEN @desde AND @hasta AND dispositivo = @dispositivo`,
     // La llave de la tabla incluye el dispositivo: sin este filtro, el día en
     // que se rastree también en celular cada búsqueda contaría dos veces.
-    params: { desde: v.desde, hasta: v.hasta, dispositivo: "desktop" },
-    types: { ...RANGO.types, dispositivo: "STRING" },
+    params: { desde: fechaParam(v.desde), hasta: fechaParam(v.hasta), dispositivo: "desktop" },
   });
   return filas.map((f) => ({
     ...f,

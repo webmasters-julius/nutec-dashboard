@@ -12,7 +12,6 @@ next-env.d.ts
 # Variables de entorno y credenciales: nunca al repositorio
 .env
 .env.*
-!.env.example
 *.pem
 *credentials*.json
 *service-account*.json
